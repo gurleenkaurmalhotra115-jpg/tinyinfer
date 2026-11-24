@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tinyinfer"
+version = "0.2.0"
+description = "From-scratch GPT-2 Transformer inference engine in pure NumPy with KV-cache, INT8 quantization, and speculative decoding"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "safetensors",
+]
+
+[tool.setuptools]
+packages = ["tinyinfer"]
+
+[tool.setuptools.package-dir]
+tinyinfer = "."
+
+[tool.pytest.ini_options]
+pythonpath = ["..", "."]

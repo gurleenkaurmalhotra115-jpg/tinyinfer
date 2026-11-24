@@ -1,0 +1,7 @@
+numpy
+safetensors
+pytest
+matplotlib
+huggingface_hub
+transformers
+torch

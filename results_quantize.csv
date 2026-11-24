@@ -1,0 +1,3 @@
+Precision,Weights (MB),Compression,Perplexity (PPL),PPL Delta (%),Tokens/sec,Latency (s)
+FP32,621.94,1.00x,23.1729,0.00%,0.63,25.49
+INT8 (Per-Channel),158.73,3.92x,23.2574,+0.36%,0.01,1318.97
