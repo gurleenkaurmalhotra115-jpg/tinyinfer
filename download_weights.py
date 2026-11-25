@@ -26,7 +26,13 @@ def download_gpt2(target_dir: str) -> None:
             continue
         url = f"{BASE_URL}/{filename}"
         print(f"[GET ] Downloading {filename} ...")
-        urllib.request.urlretrieve(url, dest)
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        )
+        with urllib.request.urlopen(req) as resp, open(dest, "wb") as out_f:
+            while chunk := resp.read(1024 * 1024):
+                out_f.write(chunk)
         print(f"[OK  ] Saved {dest} ({os.path.getsize(dest):,} bytes)")
 
 

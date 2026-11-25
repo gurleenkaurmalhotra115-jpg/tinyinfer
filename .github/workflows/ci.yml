@@ -27,8 +27,16 @@ jobs:
           pip install -r requirements.txt
           pip install --no-deps -e .
 
+      - name: Cache GPT-2 weights
+        id: cache-weights
+        uses: actions/cache@v4
+        with:
+          path: models/gpt2
+          key: gpt2-safetensors-v1
+
       - name: Download GPT-2 safetensors weights
+        if: steps.cache-weights.outputs.cache-hit != 'true'
         run: python download_weights.py
 
-      - name: Run Stages 1-4 parity and speculative tests
+      - name: Run unit test suite (22 tests)
         run: pytest tests/ -v
