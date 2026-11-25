@@ -1,6 +1,37 @@
 # tinyinfer: From-Scratch Transformer Inference Engine in Pure NumPy
 
+[![tinyinfer CI](https://github.com/gurleenkaurmalhotra115-jpg/tinyinfer/actions/workflows/ci.yml/badge.svg)](https://github.com/gurleenkaurmalhotra115-jpg/tinyinfer/actions/workflows/ci.yml)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Tests](https://img.shields.io/badge/tests-22%20passed-brightgreen.svg)
+![Dependencies](https://img.shields.io/badge/inference%20stack-Pure%20NumPy-orange.svg)
+
 `tinyinfer` is a modular, high-performance Transformer inference runtime implemented completely from first principles in pure **NumPy**. It executes autoregressive inference for generative language models (GPT-2 architecture) on CPU with **zero deep learning frameworks (no PyTorch, no TensorFlow, no HuggingFace)** in the inference path.
+
+```text
+$ python -m tinyinfer --bench --max-tokens 12 --prompt "Artificial intelligence is"
+========================================================================================
+  TINYINFER MULTI-MODE BENCHMARK (12 tokens, pure NumPy on CPU)
+  Prompt: 'Artificial intelligence is'
+========================================================================================
+[1/4] Running Vanilla Baseline (No-Cache O(N^2)) ... Done (24.67s)
+[2/4] Running Incremental KV-Cache (O(N)) ......... Done (17.78s)
+[3/4] Quantizing weights to INT8 per-channel ...... Done
+      Running INT8 Dequantized with KV-Cache ...... Done (20.15s)
+[4/4] Running Speculative Decoding (Draft: INT8, gamma=4) ... Done (25.86s)
+
+----------------------------------------------------------------------------------------
+Execution Mode           | Tokens | Time (s) | tok/s   | ms/token | RAM (MB) | Parity
+----------------------------------------------------------------------------------------
+Vanilla (No-Cache)       | 12     | 24.67    | 0.49    | 2056.2   | 622      | MATCH 
+KV-Cache (FP32)          | 12     | 17.78    | 0.68    | 1481.3   | 625      | MATCH 
+INT8 Quantized           | 12     | 20.15    | 0.60    | 1679.0   | 159      | MATCH 
+Speculative (g=4)        | 12     | 25.86    | 0.46    | 2155.2   | 625      | MATCH 
+----------------------------------------------------------------------------------------
+* Speculative Acceptance Rate: 100.0% (9/9 tokens)
+* Target Model Evaluations  : 4 (vs 12 naive autoregressive steps, 75% reduction)
+========================================================================================
+```
 
 ---
 
