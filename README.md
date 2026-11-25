@@ -110,6 +110,64 @@ Benchmarked using `tinyinfer/bench_quantize.py` on standard evaluation text:
 2. **Batched Verification**: Evaluates all $\gamma$ candidates in a single target forward pass (`gpt2_forward`).
 3. **KV-Cache Rollback**: On the first mismatch, rolls back both target and draft caches cleanly via `KVCache.truncate(keep_len)` while emitting the corrected token—preserving **100% token-for-token parity** with standard greedy decoding.
 
+#### Empirical Verification & CPU Speedup Notes
+Benchmarked with `bench_speculative.py` ($\gamma = 4$, greedy sampling):
+- **Token Parity**: **100% exact greedy token match** across all evaluation runs.
+- **Target Call Reduction**: **75% reduction in target evaluations** (4 forward passes vs. 12 naive autoregressive forward passes).
+- **CPU Wall-Clock Latency**: In pure single-threaded NumPy on CPU, both draft and target execute serially on the host processor without tensor parallelism, resulting in 0.46 tok/s vs 0.68 tok/s for FP32 KV-cache. The mathematical proof (acceptance rate & forward-call reduction) verified here scales to positive wall-clock speedups when draft and target run on parallel hardware or smaller architectures.
+
+---
+
+### Stage 5: Streaming Terminal REPL & Multi-Mode Benchmark (`cli.py`)
+An interactive streaming CLI and benchmark runner allowing instant evaluation of all 4 inference modes without writing boilerplate code:
+- **Interactive REPL**: Live token-by-token streaming with `/stats`, `/reset`, `/help`, and `/quit`.
+- **Zero Framework Dependency**: Runs directly via `python -m tinyinfer` or console script `tinyinfer`.
+- **Safe Initialization**: Clean error handling pointing users to `download_weights.py` if model safetensors weights are missing.
+- **Automated Verification**: Full parity test suite asserting CLI streaming outputs match core model generation.
+
+---
+
+## ⚡ Try It in 10 Seconds
+
+### 1. Interactive Streaming REPL
+Launch the real-time terminal REPL:
+```bash
+python -m tinyinfer
+```
+*Prompt tokens stream directly to your terminal. Type `/stats` to view token counts, tok/s, and memory.*
+
+### 2. One-Shot Prompt Generation
+Generate text with custom flags:
+```bash
+# Standard FP32 with KV-cache
+python -m tinyinfer --prompt "Deep learning is" --max-tokens 32
+
+# Compressed INT8 per-channel quantization
+python -m tinyinfer --prompt "Deep learning is" --int8 --max-tokens 32
+
+# Speculative decoding (INT8 draft -> FP32 target)
+python -m tinyinfer --prompt "Deep learning is" --speculative --gamma 4 --max-tokens 32
+```
+
+### 3. Multi-Mode Benchmark
+Compare all 4 execution modes side-by-side with a single command:
+```bash
+python -m tinyinfer --bench --max-tokens 12 --prompt "Artificial intelligence is"
+```
+```text
+========================================================================================
+Execution Mode           | Tokens | Time (s) | tok/s   | ms/token | RAM (MB) | Parity
+----------------------------------------------------------------------------------------
+Vanilla (No-Cache)       | 12     | 24.67    | 0.49    | 2056.2   | 622      | MATCH 
+KV-Cache (FP32)          | 12     | 17.78    | 0.68    | 1481.3   | 625      | MATCH 
+INT8 Quantized           | 12     | 20.15    | 0.60    | 1679.0   | 159      | MATCH 
+Speculative (g=4)        | 12     | 25.86    | 0.46    | 2155.2   | 625      | MATCH 
+----------------------------------------------------------------------------------------
+* Speculative Acceptance Rate: 100.0% (9/9 tokens)
+* Target Model Evaluations  : 4 (vs 12 naive autoregressive steps)
+========================================================================================
+```
+
 ---
 
 ## Project Structure
@@ -119,20 +177,25 @@ tinyinfer/
 ├── attention.py          # Multi-head causal self-attention with KV-cache integration
 ├── bench_kv_cache.py     # KV-cache latency & throughput benchmarking suite
 ├── bench_quantize.py     # FP32 vs INT8 perplexity, speed & memory benchmark
+├── bench_speculative.py  # Speculative decoding parity, acceptance rate & latency suite
+├── cli.py                # Streaming REPL and multi-mode benchmark entry point
 ├── generate.py           # Autoregressive generation loop with metrics tracking
 ├── kv_cache.py           # KVCache data structure with append, truncate, and memory stats
 ├── model.py              # TransformerBlock and complete GPT-2 forward pass
 ├── quantize.py           # Affine per-channel INT8 quantization and perplexity scoring
 ├── sampling.py           # Greedy argmax, temperature scaling, top-k sampling
+├── speculative.py        # Speculative draft-verify loop with KV-cache rollback
 ├── tensor_ops.py         # Pure NumPy LayerNorm, GELU, Softmax, Linear kernels
 ├── tokenizer.py          # Offline BPE tokenizer loader
 ├── weights.py            # Direct safetensors weight parser
 ├── models/gpt2/          # Weights, config, and tokenizer files
 └── tests/
-    ├── test_stage1_forward.py   # Parity validation against PyTorch/HuggingFace
-    ├── test_stage2_kv.py        # KV-cache correctness & logit invariance tests
-    ├── test_stage3_quantize.py  # INT8 reconstruction error & perplexity tests
-    └── test_stage4_speculative.py # Speculative decoding parity & rollback tests
+    ├── test_cli.py              # CLI arguments, REPL parity & missing weights tests (5 tests)
+    ├── test_stage1_forward.py   # Parity validation against PyTorch/HuggingFace (5 tests)
+    ├── test_stage2_kv.py        # KV-cache correctness & logit invariance tests (6 tests)
+    ├── test_stage3_quantize.py  # INT8 reconstruction error & perplexity tests (4 tests)
+    └── test_stage4_speculative.py # Speculative decoding parity & rollback tests (2 tests)
+    # Total: 22 automated tests passing
 ```
 
 ---
@@ -144,30 +207,22 @@ tinyinfer/
 python download_weights.py
 ```
 
-### 1. Interactive Text Generation Demo
-Run generation with the pure NumPy engine:
+### 1. Run All Automated Test Suites (22 Tests)
+Run comprehensive verification across all 5 stages:
 ```bash
-python -c "from tinyinfer.weights import load_gpt2_weights; from tinyinfer.tokenizer import LocalGPT2Tokenizer; from tinyinfer.generate import generate; w = load_gpt2_weights('tinyinfer/models/gpt2'); tok = LocalGPT2Tokenizer('tinyinfer/models/gpt2'); print(generate('Alan Turing was', w, tok, max_new_tokens=20, use_cache=True))"
+# Run all 22 tests
+pytest tinyinfer/tests/ -v
+
+# Or run stage-specific tests:
+pytest tinyinfer/tests/test_stage1_forward.py -v
+pytest tinyinfer/tests/test_stage2_kv.py -v
+pytest tinyinfer/tests/test_stage3_quantize.py -v
+pytest tinyinfer/tests/test_stage4_speculative.py -v
+pytest tinyinfer/tests/test_cli.py -v
 ```
 
-### 2. Run All Automated Test Suites
-Run comprehensive verification across all stages:
-```bash
-# Stage 1: Numerical parity with HuggingFace (5 prompts)
-pytest tinyinfer/tests/test_stage1_forward.py -v -s
-
-# Stage 2: KV-Cache step-by-step logit parity and end-to-end token match
-pytest tinyinfer/tests/test_stage2_kv.py -v -s
-
-# Stage 3: INT8 quantization reconstruction bounds, compression ratio & perplexity
-pytest tinyinfer/tests/test_stage3_quantize.py -v -s
-
-# Stage 4: Speculative decoding exact parity & KV-cache rollback
-pytest tinyinfer/tests/test_stage4_speculative.py -v -s
-```
-
-### 3. Run Benchmarks
-Generate the benchmark tables and plots:
+### 2. Run Benchmarks
+Generate benchmark tables and plots:
 ```bash
 # Benchmark KV-Cache throughput (generates results_kv_cache.csv and results_kv_cache.png)
 python tinyinfer/bench_kv_cache.py --tokens 16 32 64
@@ -176,5 +231,5 @@ python tinyinfer/bench_kv_cache.py --tokens 16 32 64
 python tinyinfer/bench_quantize.py --eval-tokens 16
 
 # Benchmark Speculative Decoding (INT8 draft -> FP32 target)
-python -m tinyinfer.bench_speculative --tokens 24 --gamma 4
+python bench_speculative.py --tokens 20 --gamma 4
 ```

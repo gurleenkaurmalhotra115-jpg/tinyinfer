@@ -13,6 +13,9 @@ dependencies = [
     "safetensors",
 ]
 
+[project.scripts]
+tinyinfer = "tinyinfer.cli:main"
+
 [tool.setuptools]
 packages = ["tinyinfer"]
 
